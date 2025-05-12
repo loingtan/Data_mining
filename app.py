@@ -1,123 +1,189 @@
 import streamlit as st
 import pandas as pd
-import plotly.express as px
-import plotly.graph_objects as go
-import numpy as np
-
-# Set page configuration
-st.set_page_config(
-    page_title="Data Analysis Dashboard",
-    page_icon="📊",
-    layout="wide"
-)
-
-# Add title and description
-st.title("📊 Data Analysis Dashboard")
-st.markdown("Interactive dashboard for data analysis and visualization")
-
-# Load the data
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 
+# Load dữ liệu
 @st.cache_data
 def load_data():
-    df = pd.read_csv('dataset_final.csv')
-    return df
+    return pd.read_csv("dataset_final.csv")  
 
+df = load_data()
 
-try:
-    df = load_data()
+# Sidebar chọn chế độ
+mode = st.sidebar.radio("Chế độ xem", ["📘 Giáo viên - Theo Khóa học", "🎓 Giáo viên - Theo Học sinh", "🙋‍♂️ Học sinh (Cá nhân)"])
 
-    # Sidebar filters
-    st.sidebar.header("Filters")
+# ========== CHẾ ĐỘ: GIÁO VIÊN - THEO KHÓA HỌC ==========
+if mode == "📘 Giáo viên - Theo Khóa học":
+    st.title("📊 Thống kê theo Khóa học")
 
-    # Add date filter if there's a date column
-    date_columns = [col for col in df.columns if 'date' in col.lower()]
-    if date_columns:
-        selected_date_column = st.sidebar.selectbox(
-            "Select Date Column", date_columns)
-        df[selected_date_column] = pd.to_datetime(df[selected_date_column])
-        date_range = st.sidebar.date_input(
-            "Select Date Range",
-            [df[selected_date_column].min(), df[selected_date_column].max()]
-        )
+    course_ids = df['course_id'].unique()
+    selected_course = st.selectbox("Chọn khóa học", course_ids)
 
-    # Create tabs for different visualizations
-    tab1, tab2, tab3 = st.tabs(["Overview", "Detailed Analysis", "Statistics"])
+    course_data = df[df['course_id'] == selected_course]
 
-    with tab1:
-        st.header("Data Overview")
+    st.subheader("📝 Thông tin khóa học")
+    st.write(f"**Tổng số học sinh:** {int(course_data['num_students'].values[0])}")
+    st.write(f"**Số lượng video:** {int(course_data['num_videos'].values[0])}")
+    st.write(f"**Số lượng bài tập:** {int(course_data['num_problems'].values[0])}")
+    st.write(f"**Số giáo viên:** {int(course_data['num_teacher'].values[0])}")
+    st.write(f"**Số trường tham gia:** {int(course_data['num_school'].values[0])}")
 
-        # Display basic statistics
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Dataset Info")
-            st.write(f"Number of rows: {len(df)}")
-            st.write(f"Number of columns: {len(df.columns)}")
+    st.subheader("📈 Tương tác học sinh")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("⏱ Thời gian xem video TB", f"{course_data['avg_video_watch_time_per_student'].values[0]:.1f} giây")
+        st.metric("💬 Bình luận TB", f"{course_data['avg_comments_per_student'].values[0]:.2f}")
+        st.metric("📑 Số lần làm bài TB", f"{course_data['avg_problem_attempts_per_student'].values[0]:.2f}")
+    with col2:
+        st.metric("📬 Trả lời TB", f"{course_data['avg_replies_per_student'].values[0]:.2f}")
+        st.metric("🎯 Tỉ lệ đúng", f"{course_data['problem_iscorrect_ratio'].values[0]*100:.1f}%")
+        st.metric("📊 Tỉ lệ hoàn thành TB", f"{course_data['course_avg_completion_rate'].values[0]*100:.1f}%")
 
-        with col2:
-            st.subheader("Column Names")
-            st.write(df.columns.tolist())
+    st.subheader("👨‍🎓 Danh sách học sinh")
+    student_list = course_data[['user_id', 'video_completion', 'problem_completion', 'completion']]
+    student_list.columns = ['User ID', 'Video %', 'Problem %', 'Overall Completion']
+    student_list[['Video %', 'Problem %', 'Overall Completion']] *= 100
+    st.dataframe(student_list.style.format({"Video %": "{:.1f}", "Problem %": "{:.1f}", "Overall Completion": "{:.1f}"}))
+    
+    st.subheader("📊 Biểu đồ phân tích học sinh")
 
-        # Display first few rows
-        st.subheader("Preview of Data")
-        st.dataframe(df.head())
+    # Vẽ biểu đồ Completion
+    fig1, ax1 = plt.subplots()
+    sns.histplot(student_list['Overall Completion'], bins=10, kde=True, ax=ax1)
+    ax1.set_title("Phân phối tỉ lệ hoàn thành (%)")
+    ax1.set_xlabel("Completion (%)")
+    st.pyplot(fig1)
 
-        # Display missing values
-        st.subheader("Missing Values Analysis")
-        missing_values = df.isnull().sum()
-        fig = px.bar(x=missing_values.index, y=missing_values.values,
-                     title="Missing Values by Column")
-        st.plotly_chart(fig)
+    # Vẽ biểu đồ Video Completion
+    fig2, ax2 = plt.subplots()
+    sns.histplot(student_list['Video %'], bins=10, color='orange', kde=True, ax=ax2)
+    ax2.set_title("Phân phối tỉ lệ hoàn thành video (%)")
+    ax2.set_xlabel("Video Completion (%)")
+    st.pyplot(fig2)
 
-    with tab2:
-        st.header("Detailed Analysis")
+    # Vẽ biểu đồ Problem Completion
+    fig3, ax3 = plt.subplots()
+    sns.histplot(student_list['Problem %'], bins=10, color='green', kde=True, ax=ax3)
+    ax3.set_title("Phân phối tỉ lệ hoàn thành bài tập (%)")
+    ax3.set_xlabel("Problem Completion (%)")
+    st.pyplot(fig3)
 
-        # Select columns for analysis
-        numeric_columns = df.select_dtypes(include=[np.number]).columns
-        categorical_columns = df.select_dtypes(include=['object']).columns
+# ========== CHẾ ĐỘ: GIÁO VIÊN - THEO HỌC SINH ==========
+elif mode == "🎓 Giáo viên - Theo Học sinh":
+    st.title("🎓 Thống kê học sinh")
 
-        if len(numeric_columns) > 0:
-            st.subheader("Numeric Data Analysis")
-            selected_numeric = st.selectbox(
-                "Select Numeric Column", numeric_columns)
+    user_ids = df['user_id'].unique()
+    selected_user = st.selectbox("Chọn học sinh", user_ids)
 
-            # Create histogram
-            fig = px.histogram(df, x=selected_numeric,
-                               title=f"Distribution of {selected_numeric}")
-            st.plotly_chart(fig)
+    user_data = df[df['user_id'] == selected_user]
 
-            # Create box plot
-            fig = px.box(df, y=selected_numeric,
-                         title=f"Box Plot of {selected_numeric}")
-            st.plotly_chart(fig)
+    st.write(f"**Thuộc khóa học:** {user_data['course_id'].values[0]}")
 
-        if len(categorical_columns) > 0:
-            st.subheader("Categorical Data Analysis")
-            selected_categorical = st.selectbox(
-                "Select Categorical Column", categorical_columns)
+    st.subheader("📚 Tiến độ học tập")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("📺 Video hoàn thành", f"{user_data['video_completion'].values[0]*100:.1f}%")
+        st.metric("📝 Bài tập hoàn thành", f"{user_data['problem_completion'].values[0]*100:.1f}%")
+        st.metric("🎯 Điểm completion (α)", f"{user_data['alpha'].values[0]:.2f}")
+    with col2:
+        st.metric("🏁 Tỉ lệ hoàn thành khóa học", f"{user_data['completion'].values[0]*100:.1f}%")
+        st.metric("📈 Tỉ lệ đúng bài tập", f"{user_data['problem_iscorrect_ratio'].values[0]*100:.1f}%")
+        st.metric("📊 Tỉ lệ làm bài", f"{user_data['problem_attempts_ratio'].values[0]*100:.1f}%")
 
-            # Create bar chart
-            value_counts = df[selected_categorical].value_counts()
-            fig = px.bar(x=value_counts.index, y=value_counts.values,
-                         title=f"Distribution of {selected_categorical}")
-            st.plotly_chart(fig)
+    st.subheader("📺 Tương tác với video")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("⏱ Tổng thời gian xem", f"{user_data['user_total_video_watch_time'].values[0]:.1f} giây")
+        st.metric("📦 Video đã xem", f"{int(user_data['video_watched'].values[0])}")
+    with col2:
+        st.metric("⏱ TB mỗi video", f"{user_data['user_avg_video_watch_time'].values[0]:.1f} giây")
 
-    with tab3:
-        st.header("Statistical Analysis")
+    st.subheader("💬 Tương tác xã hội")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("💬 Tổng bình luận", f"{user_data['total_comments'].values[0]:.0f}")
+    with col2:
+        st.metric("📬 Tổng trả lời", f"{user_data['total_replies'].values[0]:.0f}")
+        
+    st.subheader("📊 Tổng quan toàn bộ học sinh")
 
-        # Display correlation matrix for numeric columns
-        if len(numeric_columns) > 1:
-            st.subheader("Correlation Matrix")
-            corr_matrix = df[numeric_columns].corr()
-            fig = px.imshow(corr_matrix,
-                            title="Correlation Matrix",
-                            labels=dict(color="Correlation"))
-            st.plotly_chart(fig)
+    fig4, ax4 = plt.subplots(figsize=(8, 4))
+    sns.boxplot(data=df, x='completion', color='skyblue', ax=ax4)
+    ax4.set_title("Boxplot: Tỉ lệ hoàn thành của tất cả học sinh")
+    ax4.set_xlabel("Completion")
+    st.pyplot(fig4)
 
-        # Display summary statistics
-        st.subheader("Summary Statistics")
-        st.dataframe(df.describe())
+    fig5, ax5 = plt.subplots(figsize=(8, 4))
+    sns.histplot(df['user_total_video_watch_time'], bins=20, color='purple', kde=True, ax=ax5)
+    ax5.set_title("Thời gian xem video (tất cả học sinh)")
+    ax5.set_xlabel("Seconds")
+    st.pyplot(fig5)
 
-except Exception as e:
-    st.error(f"An error occurred: {str(e)}")
-    st.info("Please make sure the dataset file is in the correct location and format.")
+# ========== CHẾ ĐỘ: HỌC SINH (CÁ NHÂN) ==========
+else:
+    st.title("🙋‍♂️ Giao diện học sinh")
+
+    # Chọn học sinh
+    user_ids = df['user_id'].unique()
+    selected_user = st.selectbox("Chọn học sinh (xem riêng tư)", user_ids)
+
+    # Lấy dữ liệu của học sinh
+    user_data = df[df['user_id'] == selected_user]
+
+    # Hiển thị thông tin khóa học và học sinh
+    st.write(f"**Khóa học bạn đang học:** {user_data['course_id'].values[0]}")
+    st.write(f"**Họ và tên học sinh:** {user_data['user_id'].values[0]}")  # Thay bằng thông tin tên học sinh nếu có
+
+    st.subheader("📚 Tiến độ học tập cá nhân")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("📺 Video hoàn thành", f"{user_data['video_completion'].values[0]*100:.1f}%")
+        st.metric("📝 Bài tập hoàn thành", f"{user_data['problem_completion'].values[0]*100:.1f}%")
+        st.metric("🎯 Điểm completion (α)", f"{user_data['alpha'].values[0]:.2f}")
+    with col2:
+        st.metric("🏁 Tỉ lệ hoàn thành khóa học", f"{user_data['completion'].values[0]*100:.1f}%")
+        st.metric("📈 Tỉ lệ đúng bài tập", f"{user_data['problem_iscorrect_ratio'].values[0]*100:.1f}%")
+        st.metric("📊 Tỉ lệ làm bài", f"{user_data['problem_attempts_ratio'].values[0]*100:.1f}%")
+
+    st.subheader("📺 Tương tác video")
+    st.metric("⏱ Thời gian xem video TB", f"{user_data['user_avg_video_watch_time'].values[0]:.1f} giây")
+    st.metric("📦 Video đã xem", f"{int(user_data['video_watched'].values[0])}")
+
+    # Hiển thị thông tin khóa học chi tiết
+    course_id = user_data['course_id'].values[0]
+    course_data = df[df['course_id'] == course_id]
+
+    st.subheader("📝 Thông tin khóa học")
+    st.write(f"**Tổng số học sinh trong khóa học:** {int(course_data['num_students'].values[0])}")
+    st.write(f"**Số lượng video trong khóa học:** {int(course_data['num_videos'].values[0])}")
+    st.write(f"**Số lượng bài tập trong khóa học:** {int(course_data['num_problems'].values[0])}")
+    st.write(f"**Số giáo viên trong khóa học:** {int(course_data['num_teacher'].values[0])}")
+    st.write(f"**Số trường tham gia khóa học:** {int(course_data['num_school'].values[0])}")
+
+    st.subheader("📊 Tương tác học sinh trong khóa học")
+    col1, col2 = st.columns(2)
+    with col1:
+        st.metric("⏱ Thời gian xem video TB khóa học", f"{course_data['avg_video_watch_time_per_student'].values[0]:.1f} giây")
+        st.metric("💬 Bình luận TB khóa học", f"{course_data['avg_comments_per_student'].values[0]:.2f}")
+    with col2:
+        st.metric("📑 Số lần làm bài TB khóa học", f"{course_data['avg_problem_attempts_per_student'].values[0]:.2f}")
+        st.metric("📬 Trả lời TB khóa học", f"{course_data['avg_replies_per_student'].values[0]:.2f}")
+    
+    # Vẽ biểu đồ về khóa học
+    st.subheader("📊 Biểu đồ phân tích khóa học")
+
+    # Biểu đồ tỷ lệ hoàn thành khóa học
+    fig1, ax1 = plt.subplots()
+    sns.histplot(course_data['course_avg_completion_rate'], bins=10, kde=True, ax=ax1)
+    ax1.set_title("Phân phối tỉ lệ hoàn thành khóa học (%)")
+    ax1.set_xlabel("Completion (%)")
+    st.pyplot(fig1)
+
+    # Biểu đồ thời gian xem video khóa học
+    fig2, ax2 = plt.subplots()
+    sns.histplot(course_data['avg_video_watch_time_per_student'], bins=10, color='orange', kde=True, ax=ax2)
+    ax2.set_title("Phân phối thời gian xem video khóa học (giây)")
+    ax2.set_xlabel("Video Watch Time (s)")
+    st.pyplot(fig2)
