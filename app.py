@@ -2,7 +2,31 @@ import streamlit as st
 import pandas as pd
 import matplotlib.pyplot as plt
 import seaborn as sns
+import joblib
+import numpy as np
 
+# Load mô hình SVR đã huấn luyện
+@st.cache_resource
+def load_model():
+    return joblib.load("svr.pkl")
+
+model = load_model()
+
+# Danh sách các cột đặc trưng dùng để dự đoán
+FEATURE_COLS = [
+    'video_completion', 'problem_completion', 'alpha',
+    'num_videos', 'num_problems', 'num_teacher', 'num_school',
+    'field_encoded', 'prerequisites_encoded', 'num_exercises',
+    'num_students', 'total_default_video_time', 'total_comments',
+    'total_replies', 'avg_comments_per_student', 'avg_replies_per_student',
+    'total_problem_attempts', 'avg_problem_attempts_per_student',
+    'course_total_completion_rate', 'course_avg_completion_rate',
+    'total_video_watch_time', 'avg_video_watch_time_per_student',
+    'problem_iscorrect_ratio', 'problem_attempts_ratio',
+    'problem_score_ratio', 'problem_lang_ratio', 'problem_option_ratio',
+    'problem_type_ratio', 'user_total_video_watch_time',
+    'user_avg_video_watch_time', 'video_watched'
+]
 
 # Load dữ liệu
 @st.cache_data
@@ -10,6 +34,8 @@ def load_data():
     return pd.read_csv("dataset_final.csv")  
 
 df = load_data()
+
+df['predicted_completion'] = model.predict(df[FEATURE_COLS].fillna(0))
 
 # Sidebar chọn chế độ
 mode = st.sidebar.radio("Chế độ xem", ["📘 Giáo viên - Theo Khóa học", "🎓 Giáo viên - Theo Học sinh", "🙋‍♂️ Học sinh (Cá nhân)"])
@@ -42,10 +68,15 @@ if mode == "📘 Giáo viên - Theo Khóa học":
         st.metric("📊 Tỉ lệ hoàn thành TB", f"{course_data['course_avg_completion_rate'].values[0]*100:.1f}%")
 
     st.subheader("👨‍🎓 Danh sách học sinh")
-    student_list = course_data[['user_id', 'video_completion', 'problem_completion', 'completion']]
-    student_list.columns = ['User ID', 'Video %', 'Problem %', 'Overall Completion']
-    student_list[['Video %', 'Problem %', 'Overall Completion']] *= 100
-    st.dataframe(student_list.style.format({"Video %": "{:.1f}", "Problem %": "{:.1f}", "Overall Completion": "{:.1f}"}))
+    student_list = course_data[['user_id', 'video_completion', 'problem_completion', 'completion', 'predicted_completion']]
+    student_list.columns = ['User ID', 'Video %', 'Problem %', 'Overall Completion', 'Predicted Completion']
+    student_list[['Video %', 'Problem %', 'Overall Completion', 'Predicted Completion']] *= 100
+    st.dataframe(student_list.style.format({
+        "Video %": "{:.1f}",
+        "Problem %": "{:.1f}",
+        "Overall Completion": "{:.1f}",
+        "Predicted Completion": "{:.1f}"
+    }))
     
     st.subheader("📊 Biểu đồ phân tích học sinh")
 
@@ -90,7 +121,7 @@ elif mode == "🎓 Giáo viên - Theo Học sinh":
     with col2:
         st.metric("🏁 Tỉ lệ hoàn thành khóa học", f"{user_data['completion'].values[0]*100:.1f}%")
         st.metric("📈 Tỉ lệ đúng bài tập", f"{user_data['problem_iscorrect_ratio'].values[0]*100:.1f}%")
-        st.metric("📊 Tỉ lệ làm bài", f"{user_data['problem_attempts_ratio'].values[0]*100:.1f}%")
+        st.metric("🔮 Dự đoán (SVR)", f"{user_data['predicted_completion'].values[0]*100:.1f}%")
 
     st.subheader("📺 Tương tác với video")
     col1, col2 = st.columns(2)
@@ -145,11 +176,7 @@ else:
     with col2:
         st.metric("🏁 Tỉ lệ hoàn thành khóa học", f"{user_data['completion'].values[0]*100:.1f}%")
         st.metric("📈 Tỉ lệ đúng bài tập", f"{user_data['problem_iscorrect_ratio'].values[0]*100:.1f}%")
-        st.metric("📊 Tỉ lệ làm bài", f"{user_data['problem_attempts_ratio'].values[0]*100:.1f}%")
-
-    st.subheader("📺 Tương tác video")
-    st.metric("⏱ Thời gian xem video TB", f"{user_data['user_avg_video_watch_time'].values[0]:.1f} giây")
-    st.metric("📦 Video đã xem", f"{int(user_data['video_watched'].values[0])}")
+        st.metric("🔮 Dự đoán (SVR)", f"{user_data['predicted_completion'].values[0]*100:.1f}%")
 
     # Hiển thị thông tin khóa học chi tiết
     course_id = user_data['course_id'].values[0]
